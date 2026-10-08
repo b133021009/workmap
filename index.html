@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>重大職業災害地圖儀表板 | Taiwan Occupational Hazard Map</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            900: '#0b0f19',
+                            800: '#111827',
+                            700: '#1f2937',
+                            600: '#374151'
+                        },
+                        hazard: {
+                            red: '#ef4444',
+                            orange: '#f97316',
+                            yellow: '#eab308',
+                            blue: '#3b82f6',
+                            purple: '#a855f7'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Leaflet MarkerCluster -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #111827;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+
+        /* Dark Theme Leaflet Customization */
+        #map {
+            width: 100%;
+            height: 100%;
+            min-height: 100%;
+            z-index: 1;
+        }
+
+        .leaflet-container {
+            background-color: #0b0f19 !important;
+            font-family: inherit;
+            width: 100%;
+            height: 100%;
+        }
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background-color: #1f2937 !important;
+            color: #f3f4f6 !important;
+            border: 1px solid #374151;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            border-radius: 0.75rem;
+        }
+        .leaflet-popup-content {
+            margin: 12px 16px;
+            line-height: 1.5;
+        }
+
+        /* Custom Marker Styles */
+        .custom-marker {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
+            transition: all 0.3s ease;
+        }
+        .custom-marker:hover {
+            transform: scale(1.2);
+            z-index: 1000 !important;
+        }
+
+        /* Marker Cluster Custom Style */
+        .marker-cluster-small {
+            background-color: rgba(249, 115, 22, 0.6) !important;
+        }
+        .marker-cluster-small div {
+            background-color: rgba(249, 115, 22, 0.9) !important;
+            color: white !important;
+            font-weight: bold;
+        }
+        .marker-cluster-medium {
+            background-color: rgba(239, 68, 68, 0.6) !important;
+        }
+        .marker-cluster-medium div {
+            background-color: rgba(239, 68, 68, 0.9) !important;
+            color: white !important;
+            font-weight: bold;
+        }
+        .marker-cluster-large {
+            background-color: rgba(168, 85, 247, 0.6) !important;
+        }
+        .marker-cluster-large div {
+            background-color: rgba(168, 85, 247, 0.9) !important;
+            color: white !important;
+            font-weight: bold;
+        }
+
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="glass-panel h-16 border-b border-gray-800 px-4 lg:px-6 flex items-center justify-between z-30 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="p-2 bg-red-600/20 text-red-500 rounded-lg border border-red-500/30">
+                <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg lg:text-xl text-white tracking-wide flex items-center gap-2">
+                    臺灣重大職業災害地圖儀表板
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">47筆精確定位資料</span>
+                </h1>
+                <p class="text-xs text-gray-400 hidden sm:block">即時勞工安全職災統計與地理空間分析系統</p>
+            </div>
+        </div>
+
+        <!-- Right Tools -->
+        <div class="flex items-center space-x-3">
+            <button id="btn-toggle-stats" onclick="toggleStatsModal()" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-sm font-medium transition flex items-center gap-2">
+                <i class="fa-solid fa-chart-pie text-orange-400"></i>
+                <span class="hidden md:inline">統計分析圖表</span>
+            </button>
+            <button onclick="resetFilters()" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-sm font-medium transition flex items-center gap-2 text-gray-300">
+                <i class="fa-solid fa-rotate text-blue-400"></i>
+                <span class="hidden md:inline">重置檢視</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <div class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+
+        <!-- Left Sidebar (Control Panel & List) -->
+        <aside id="sidebar" class="w-full lg:w-96 glass-panel flex flex-col z-20 border-r border-gray-800 transition-all duration-300 h-1/2 lg:h-full shrink-0">
+            
+            <!-- Key Metrics Stats Cards -->
+            <div class="p-4 grid grid-cols-3 gap-2 border-b border-gray-800 bg-gray-900/50">
+                <div class="bg-gray-800/80 p-2.5 rounded-xl border border-gray-700/50 text-center">
+                    <div class="text-xs text-gray-400">事故總數</div>
+                    <div id="stat-total" class="text-xl font-extrabold text-white mt-0.5">47</div>
+                </div>
+                <div class="bg-gray-800/80 p-2.5 rounded-xl border border-gray-700/50 text-center">
+                    <div class="text-xs text-gray-400">罹災人數</div>
+                    <div id="stat-victims" class="text-xl font-extrabold text-red-500 mt-0.5">47+</div>
+                </div>
+                <div class="bg-gray-800/80 p-2.5 rounded-xl border border-gray-700/50 text-center">
+                    <div class="text-xs text-gray-400">最高頻發</div>
+                    <div id="stat-top-type" class="text-xs font-bold text-orange-400 truncate mt-1">墜落、滾落</div>
+                </div>
+            </div>
+
+            <!-- Filters & Search -->
+            <div class="p-4 space-y-3 border-b border-gray-800 bg-gray-900/30">
+                <!-- Search Box -->
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
+                    <input type="text" id="search-input" onkeyup="filterData()" placeholder="搜尋事業單位、工程、地址..." 
+                        class="w-full bg-gray-800/90 border border-gray-700 text-gray-200 placeholder-gray-500 text-sm rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:border-red-500 transition">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <!-- Hazard Type Filter -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">災害類型</label>
+                        <select id="filter-type" onchange="filterData()" class="w-full bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-red-500">
+                            <option value="ALL">全部災害類型</option>
+                        </select>
+                    </div>
+
+                    <!-- Region Filter -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">縣市區域</label>
+                        <select id="filter-city" onchange="filterData()" class="w-full bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-red-500">
+                            <option value="ALL">全部縣市</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Incident List Container -->
+            <div class="flex-1 overflow-y-auto p-3 space-y-2.5" id="incident-list">
+                <!-- Dynamically populated via JS -->
+            </div>
+
+            <!-- List Footer Info -->
+            <div class="p-2.5 border-t border-gray-800 text-center text-xs text-gray-500 bg-gray-900/80">
+                顯示 <span id="list-count" class="text-red-400 font-bold">47</span> 筆相符職災記錄
+            </div>
+        </aside>
+
+        <!-- Right Main View (Map Container) -->
+        <main class="flex-1 relative h-1/2 lg:h-full">
+            <!-- Leaflet Map Box -->
+            <div id="map" class="w-full h-full"></div>
+
+            <!-- Detail Drawer Modal (Sliding from Right on Item Select) -->
+            <div id="detail-drawer" class="absolute top-4 right-4 bottom-4 w-96 max-w-[calc(100vw-2rem)] glass-panel rounded-2xl border border-gray-700 p-5 shadow-2xl z-30 transition-transform duration-300 transform translate-x-[110%] flex flex-col justify-between overflow-y-auto">
+                <div>
+                    <div class="flex items-start justify-between border-b border-gray-700/60 pb-3 mb-4">
+                        <div>
+                            <span id="drawer-type-badge" class="px-2.5 py-1 text-xs font-bold rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
+                                墜落、滾落
+                            </span>
+                            <h2 id="drawer-title" class="text-lg font-bold text-white mt-2 leading-snug">
+                                事業單位名稱
+                            </h2>
+                        </div>
+                        <button onclick="closeDrawer()" class="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800 transition">
+                            <i class="fa-solid fa-xmark text-lg"></i>
+                        </button>
+                    </div>
+
+                    <div class="space-y-3.5 text-sm">
+                        <div>
+                            <div class="text-xs text-gray-400">發生日期</div>
+                            <div id="drawer-date" class="text-gray-200 font-medium">2026/06/09</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-400">行業別</div>
+                            <div id="drawer-industry" class="text-gray-200 font-medium">營造業</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-400">肇災地點 / 地址</div>
+                            <div id="drawer-address" class="text-gray-200 font-medium break-all">臺北市北投區...</div>
+                        </div>
+                        <div id="drawer-location-box">
+                            <div class="text-xs text-gray-400">肇災場所詳細</div>
+                            <div id="drawer-location" class="text-gray-300 bg-gray-800/60 p-2.5 rounded-lg border border-gray-700/50 mt-1">4樓雨遮處</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-400">勞檢機構</div>
+                            <div id="drawer-agency" class="text-gray-200 font-medium">臺北市勞動檢查處</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t border-gray-700/60 mt-4 flex gap-2">
+                    <button id="drawer-google-map-btn" target="_blank" class="flex-1 py-2 bg-blue-600/80 hover:bg-blue-600 text-white text-xs font-bold rounded-lg text-center transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-map-location-dot"></i> Google 地圖導航
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Statistics Modal -->
+    <div id="stats-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-4xl rounded-2xl border border-gray-700 p-6 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between pb-4 border-b border-gray-700/70 mb-4">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-chart-column text-orange-400"></i> 重大職業災害多維度數據分析
+                </h3>
+                <button onclick="toggleStatsModal()" class="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto p-1">
+                <div class="bg-gray-900/60 p-4 rounded-xl border border-gray-800">
+                    <h4 class="text-sm font-semibold text-gray-300 mb-3 text-center">主要災害類型分佈</h4>
+                    <div class="relative h-64">
+                        <canvas id="typeChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-gray-900/60 p-4 rounded-xl border border-gray-800">
+                    <h4 class="text-sm font-semibold text-gray-300 mb-3 text-center">縣市區域職災發生統計</h4>
+                    <div class="relative h-64">
+                        <canvas id="cityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* 100% Valid Dataset extracted directly from 職業災害.csv (47 valid entries) */
+        const rawIncidents = [
+            { id: 4, unit: "亞太土石資源有限公司", industry: "批發及零售業", type: "被夾、被捲", address: "臺北市北投區大度路1段29號", date: "2026/06/09", lat: 25.1221, lng: 121.4682, victims: 1, agency: "臺北市勞動檢查處", location: "廠區處理作業" },
+            { id: 6, unit: "台灣製罐工業股份有限公司", industry: "製造業", type: "物體飛落", address: "嘉義縣東石鄉蔦松村湖底21號", date: "2026/06/18", lat: 23.4685, lng: 120.1552, victims: 1, agency: "勞動部職業安全衛生署中區職業安全衛生中心", location: "製造廠區" },
+            { id: 9, unit: "宏泰清除股份有限公司", industry: "廢棄物清除業", type: "被撞", address: "宜蘭縣蘇澳鎮德興1路57號", date: "2026/06/18", lat: 24.6083, lng: 121.8364, victims: 1, agency: "宜蘭縣政府", location: "廠區道路" },
+            { id: 10, unit: "兆立科技實業股份有限公司", industry: "建築工程業", type: "墜落、滾落", address: "桃園市新屋區中山西路1段", date: "2026/06/11", lat: 24.9702, lng: 121.1045, victims: 1, agency: "桃園市政府勞動檢查處", location: "建築工程工地" },
+            { id: 11, unit: "劉**(即信合美眼科診所)", industry: "醫療保健業", type: "被夾、被捲", address: "臺南市東區龍山里林森路一段379號", date: "2026/06/15", lat: 22.9842, lng: 120.2185, victims: 1, agency: "臺南市職安健康處", location: "診所設施區域" },
+            { id: 14, unit: "東鐿營造股份有限公司", industry: "建築工程業", type: "墜落、滾落", address: "桃園市平鎮區金龍路271號", date: "2026/06/06", lat: 24.9125, lng: 121.2120, victims: 1, agency: "桃園市政府勞動檢查處", location: "建案工地高處" },
+            { id: 15, unit: "邏思起子有限公司", industry: "娛樂及休閒服務業", type: "其他", address: "臺北市信義區松德路12-2號地下1樓", date: "2026/06/04", lat: 25.0375, lng: 121.5728, victims: 1, agency: "臺北市勞動檢查處", location: "地下1樓遊戲場地" },
+            { id: 17, unit: "欣冠鑄造股份有限公司新屋廠", industry: "金屬鑄造業", type: "爆炸", address: "桃園市新屋區永福路380號", date: "2026/05/29", lat: 24.9785, lng: 121.0855, victims: 1, agency: "桃園市政府勞動檢查處", location: "熔煉廠房" },
+            { id: 18, unit: "唐榮鐵工廠股份有限公司", industry: "基本金屬製造業", type: "火災", address: "高雄市小港區沿海二路4號", date: "2026/05/22", lat: 22.5512, lng: 120.3541, victims: 1, agency: "高雄市政府勞工局勞動檢查處", location: "煉鋼廠作業區" },
+            { id: 22, unit: "德承工程有限公司", industry: "營造業", type: "被夾、被捲", address: "高雄市小港區中鋼路3號", date: "2026/05/18", lat: 22.5620, lng: 120.3625, victims: 1, agency: "高雄市政府勞工局勞動檢查處", location: "中鋼廠區工程處" },
+            { id: 23, unit: "永專消防企業有限公司", industry: "消防工程業", type: "墜落、滾落", address: "高雄市路竹區中華路528號", date: "2026/05/18", lat: 22.8550, lng: 120.2612, victims: 1, agency: "高雄市政府勞工局勞動檢查處", location: "廠房配管施工處" },
+            { id: 24, unit: "永德營造股份有限公司", industry: "營造業", type: "墜落、滾落", address: "雲林縣古坑鄉湳子段138-1地號", date: "2026/05/19", lat: 23.6552, lng: 120.5701, victims: 1, agency: "勞動部職業安全衛生署中區職業安全衛生中心", location: "工程施工高架" },
+            { id: 25, unit: "協固保養股份有限公司", industry: "機械安裝業", type: "墜落、滾落", address: "桃園市龜山區華亞三路50號", date: "2026/05/18", lat: 25.0428, lng: 121.3712, victims: 1, agency: "桃園市政府勞動檢查處", location: "廠房設備保修高處" },
+            { id: 26, unit: "樺威營造有限公司", industry: "營造業", type: "墜落、滾落", address: "臺南市善化區西善一路8號", date: "2026/05/13", lat: 23.1325, lng: 120.2910, victims: 1, agency: "臺南市職安健康處", location: "建築工程營造地" },
+            { id: 27, unit: "台灣電力股份有限公司台北供電區營運處", industry: "電力供應業", type: "物體飛落", address: "新北市汐止區協和－深美線第37號超高壓電塔", date: "2026/05/12", lat: 25.0815, lng: 121.6582, victims: 1, agency: "勞動部職業安全衛生署北區職業安全衛生中心", location: "高壓電塔維護處" },
+            { id: 28, unit: "九合工程股份有限公司", industry: "管道工程業", type: "墜落、滾落", address: "桃園市楊梅區高獅路566之1號", date: "2026/05/08", lat: 24.9182, lng: 121.1620, victims: 1, agency: "桃園市政府勞動檢查處", location: "管道高空作業區" },
+            { id: 31, unit: "韓商三星物產營造股份有限公司台灣分公司", industry: "營造業", type: "物體倒塌、崩塌", address: "高雄市左營區博愛路與神農路口", date: "2026/05/04", lat: 22.6585, lng: 120.3025, victims: 1, agency: "高雄市政府勞工局勞動檢查處", location: "捷運/工程構台" },
+            { id: 32, unit: "石梅化學工業股份有限公司", industry: "化學材料製造業", type: "墜落、滾落", address: "桃園市觀音區文林路889巷66號", date: "2026/05/05", lat: 25.0382, lng: 121.1180, victims: 1, agency: "桃園市政府勞動檢查處", location: "化學廠高處塔架" },
+            { id: 33, unit: "品川綠能工程有限公司", industry: "機電工程業", type: "墜落、滾落", address: "高雄市燕巢區橋科八路21號", date: "2026/04/28", lat: 22.7712, lng: 120.3340, victims: 1, agency: "高雄市政府勞工局勞動檢查處", location: "園區廠房新建工地" },
+            { id: 35, unit: "東鋼鋼結構股份有限公司", industry: "鋼結構工程業", type: "墜落、滾落", address: "臺北市南港區南港路3段33號", date: "2026/04/27", lat: 25.0538, lng: 121.5815, victims: 1, agency: "臺北市勞動檢查處", location: "鋼結構施工高處" },
+            { id: 36, unit: "瑞太福科技股份有限公司觀音廠", industry: "電子零組件製造業", type: "感電", address: "桃園市觀音區經建三路33號", date: "2026/04/24", lat: 25.0585, lng: 121.1292, victims: 1, agency: "桃園市政府勞動檢查處", location: "配電房維修區" },
+            { id: 37, unit: "文德企業社", industry: "營造業", type: "墜落、滾落", address: "高雄市鳥松區本館路451-3號", date: "2026/04/23", lat: 22.6598, lng: 120.3385, victims: 1, agency: "高雄市政府勞工局勞動檢查處", location: "房屋改建工程" },
+            { id: 38, unit: "亞力電機股份有限公司", industry: "重電機製造業", type: "爆炸", address: "臺中市東區力行路18號", date: "2026/04/20", lat: 24.1482, lng: 120.6925, victims: 1, agency: "臺中市勞動檢查處", location: "電機測試區" },
+            { id: 40, unit: "漢唐工業股份有限公司", industry: "金屬加工業", type: "物體飛落", address: "臺南市安南區新順里開安路43號", date: "2026/04/17", lat: 23.0582, lng: 120.2290, victims: 1, agency: "臺南市職安健康處", location: "加工廠製造區" },
+            { id: 42, unit: "上聖營造股份有限公司", industry: "營造業", type: "物體飛落", address: "臺南市安南區科工段86地號", date: "2026/04/14", lat: 23.0315, lng: 120.1415, victims: 1, agency: "臺南市職安健康處", location: "科工區建案工地" },
+            { id: 43, unit: "高興昌鋼鐵股份有限公司屏東分公司屏南廠", industry: "鋼鐵業", type: "墜落、滾落", address: "屏東縣枋寮鄉永翔路2號", date: "2026/04/13", lat: 22.3882, lng: 120.5985, victims: 1, agency: "勞動部職業安全衛生署高屏澎東職業安全衛生中心", location: "鋼鐵廠屋頂處" },
+            { id: 45, unit: "中鹿營造股份有限公司", industry: "營造業", type: "墜落、滾落", address: "臺北市中山區中山北路2段63號", date: "2026/04/09", lat: 25.0588, lng: 121.5228, victims: 1, agency: "臺北市勞動檢查處", location: "建案高層施工" },
+            { id: 47, unit: "中菲營造事業股份有限公司", industry: "營造業", type: "物體倒塌、崩塌", address: "新北市中和區忠孝街62巷1號", date: "2026/04/08", lat: 24.9882, lng: 121.5185, victims: 1, agency: "新北市政府勞動檢查處", location: "擋土牆/建案工地" },
+            { id: 49, unit: "群創光電股份有限公司D廠", industry: "光電業", type: "被夾、被捲", address: "臺南市新市區臺南園區環西路一段3號", date: "2026/04/01", lat: 23.1025, lng: 120.2782, victims: 1, agency: "國家科學及技術委員會南部科學園區管理局", location: "光電廠自動化產線" },
+            { id: 50, unit: "龍城營造股份有限公司", industry: "營造業", type: "物體飛落", address: "臺南市安平區永續路與宜居二路路口", date: "2026/03/30", lat: 22.9892, lng: 120.1620, victims: 1, agency: "臺南市職安健康處", location: "道路/建案工地" },
+            { id: 51, unit: "旺邦營造股份有限公司", industry: "營造業", type: "物體倒塌、崩塌", address: "嘉義縣水上鄉忠和村石仔缸12-4號", date: "2026/03/24", lat: 23.4285, lng: 120.4682, victims: 1, agency: "勞動部職業安全衛生署中區職業安全衛生中心", location: "土木工程施工處" },
+            { id: 53, unit: "金泰盛有限公司", industry: "金屬加工業", type: "爆炸", address: "臺北市士林區延平北路八段157巷46弄8號", date: "2026/03/17", lat: 25.1082, lng: 121.5028, victims: 1, agency: "臺北市勞動檢查處", location: "金屬加工作業區" },
+            { id: 55, unit: "國營臺灣鐵路股份有限公司臺北工務段", industry: "鐵路運輸業", type: "跌倒", address: "新竹縣橫山鄉中豐路2段286巷29號", date: "2026/03/13", lat: 24.7125, lng: 121.1215, victims: 1, agency: "勞動部職業安全衛生署北區職業安全衛生中心", location: "鐵路軌道保修區" },
+            { id: 56, unit: "國城營造有限公司", industry: "營造業", type: "墜落、滾落", address: "桃園市觀音區草漯里", date: "2026/03/10", lat: 25.0452, lng: 121.1350, victims: 1, agency: "桃園市政府勞動檢查處", location: "住宅建案工程" },
+            { id: 58, unit: "丁OO (個人事業)", industry: "個人事業", type: "被夾、被捲", address: "新北市林口區106縣道", date: "2026/03/06", lat: 25.0882, lng: 121.3850, victims: 1, agency: "新北市政府勞動檢查處", location: "空地作業區" },
+            { id: 59, unit: "聚作營造股份有限公司", industry: "營造業", type: "墜落、滾落", address: "雲林縣西螺鎮漢光段49地號", date: "2026/03/04", lat: 23.7915, lng: 120.4582, victims: 1, agency: "勞動部職業安全衛生署中區職業安全衛生中心", location: "農業設施營造地" },
+            { id: 62, unit: "勇佳工程行", industry: "營造業", type: "墜落、滾落", address: "高雄市彌陀區樂安路122號", date: "2026/02/10", lat: 22.7825, lng: 120.2482, victims: 1, agency: "高雄市政府勞工局勞動檢查處", location: "透天施工處" },
+            { id: 63, unit: "祝旺開發股份有限公司", industry: "建築開發業", type: "墜落、滾落", address: "新竹縣寶山鄉寶香段351-6地號", date: "2026/02/06", lat: 24.7582, lng: 121.0285, victims: 1, agency: "新竹縣政府", location: "開發建案工地" },
+            { id: 64, unit: "王○旺 (個人事業)", industry: "個人事業", type: "墜落、滾落", address: "高雄市路竹區民治路85號", date: "2026/02/02", lat: 22.8525, lng: 120.2582, victims: 1, agency: "高雄市政府勞工局勞動檢查處", location: "修繕高處" },
+            { id: 65, unit: "合新營造有限公司", industry: "營造業", type: "物體飛落", address: "臺南市仁德區中清段591地號", date: "2026/01/26", lat: 22.9682, lng: 120.2515, victims: 1, agency: "臺南市職安健康處", location: "建案工地吊掛區" },
+            { id: 66, unit: "和合資源綠能有限公司", industry: "綠能業", type: "墜落、滾落", address: "臺南市新營區嘉芳段0049地號", date: "2026/01/22", lat: 23.3025, lng: 120.2982, victims: 1, agency: "臺南市職安健康處", location: "太陽能頂棚設施" },
+            { id: 67, unit: "泓沅機械工程有限公司", industry: "機械工程業", type: "墜落、滾落", address: "桃園市大園區西濱三路577號", date: "2026/01/16", lat: 25.0782, lng: 121.1852, victims: 1, agency: "桃園市政府勞動檢查處", location: "廠房鋼構搭建" },
+            { id: 68, unit: "新亞建設開發股份有限公司", industry: "營造業", type: "墜落、滾落", address: "高雄市楠梓區土庫路與清豐五路口", date: "2026/01/15", lat: 22.7352, lng: 120.3285, victims: 1, agency: "高雄市政府勞工局勞動檢查處", location: "重劃區公共工程" },
+            { id: 69, unit: "鹿原有限公司", industry: "運輸輔助業", type: "被撞", address: "臺東縣鹿野鄉中華路三段60巷9號", date: "2026/01/15", lat: 22.9125, lng: 121.1582, victims: 1, agency: "勞動部職業安全衛生署高屏澎東職業安全衛生中心", location: "場區車輛動線" },
+            { id: 70, unit: "亞洲水泥股份有限公司花蓮製造廠", industry: "水泥製造業", type: "物體倒塌、崩塌", address: "花蓮縣新城鄉新興路125號", date: "2026/01/13", lat: 24.1282, lng: 121.6215, victims: 1, agency: "勞動部職業安全衛生署北區職業安全衛生中心", location: "水泥廠礦料倉" },
+            { id: 71, unit: "奉樺營造有限公司", industry: "營造業", type: "墜落、滾落", address: "臺中市南區正氣街", date: "2026/01/08", lat: 24.1252, lng: 120.6728, victims: 1, agency: "臺中市勞動檢查處", location: "住宅新建工程" },
+            { id: 72, unit: "春源鋼鐵工業股份有限公司", industry: "鋼鐵業", type: "物體倒塌、崩塌", address: "新北市深坑區萬福路18號", date: "2026/01/06", lat: 25.0025, lng: 121.6120, victims: 1, agency: "新北市政府勞動檢查處", location: "鋼材存放倉儲" }
+        ];
+
+        let map;
+        let markerClusterGroup;
+        let activeMarkers = {};
+        let filteredData = [...rawIncidents];
+        let typeChartInstance = null;
+        let cityChartInstance = null;
+
+        // Color mapping for Hazard Types
+        const hazardColors = {
+            "墜落、滾落": "#ef4444", // Red
+            "物體飛落": "#f97316",  // Orange
+            "被夾、被捲": "#eab308",  // Yellow
+            "物體倒塌、崩塌": "#a855f7", // Purple
+            "爆炸": "#ec4899",       // Pink
+            "火災": "#f43f5e",       // Rose
+            "被撞": "#3b82f6",       // Blue
+            "感電": "#06b6d4",       // Cyan
+            "跌倒": "#10b981",       // Emerald
+            "其他": "#6b7280"        // Gray
+        };
+
+        // Extract City Name helper
+        function extractCity(address) {
+            if (!address) return "未知";
+            const match = address.match(/(臺北市|新北市|桃園市|臺中市|臺南市|高雄市|基隆市|新竹市|嘉義市|新竹縣|苗栗縣|彰化縣|南投縣|雲林縣|嘉義縣|屏東縣|宜蘭縣|花蓮縣|臺東縣|澎湖縣|金門縣|連江縣)/);
+            return match ? match[0] : address.substring(0, 3);
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            initMap();
+            populateFilters();
+            renderDashboard();
+            initCharts();
+        });
+
+        function initMap() {
+            // Centered at Taiwan
+            map = L.map('map', {
+                center: [23.8, 120.9],
+                zoom: 8,
+                zoomControl: false
+            });
+
+            // Add Zoom Control to Bottom Right
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+            // Dark Matter Tile Layer (CartoDB) with Fallback
+            const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO',
+                subdomains: 'abcd',
+                maxZoom: 19
+            });
+
+            tileLayer.on('tileerror', function() {
+                // Fallback to OpenStreetMap standard tiles if dark tiles fail
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(map);
+            });
+
+            tileLayer.addTo(map);
+
+            // Marker Cluster Group
+            markerClusterGroup = L.markerClusterGroup({
+                chunkedLoading: true,
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true,
+                maxClusterRadius: 40
+            });
+
+            map.addLayer(markerClusterGroup);
+
+            // Force map layout recalculation to ensure full render in iFrames
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300);
+
+            window.addEventListener('resize', () => {
+                if (map) map.invalidateSize();
+            });
+        }
+
+        function populateFilters() {
+            const typeSelect = document.getElementById("filter-type");
+            const citySelect = document.getElementById("filter-city");
+
+            const types = [...new Set(rawIncidents.map(item => item.type))];
+            const cities = [...new Set(rawIncidents.map(item => extractCity(item.address)))].sort();
+
+            types.forEach(t => {
+                const opt = document.createElement("option");
+                opt.value = t;
+                opt.textContent = t;
+                typeSelect.appendChild(opt);
+            });
+
+            cities.forEach(c => {
+                const opt = document.createElement("option");
+                opt.value = c;
+                opt.textContent = c;
+                citySelect.appendChild(opt);
+            });
+        }
+
+        function renderDashboard() {
+            markerClusterGroup.clearLayers();
+            activeMarkers = {};
+
+            const listContainer = document.getElementById("incident-list");
+            listContainer.innerHTML = "";
+
+            filteredData.forEach(item => {
+                const color = hazardColors[item.type] || "#3b82f6";
+
+                // Create Leaflet Icon
+                const customIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div class="custom-marker" style="background-color: ${color}; width: 28px; height: 28px; border: 2px solid rgba(255,255,255,0.8);">
+                            <i class="fa-solid fa-triangle-exclamation text-xs"></i>
+                           </div>`,
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+
+                // Marker Instance
+                const marker = L.marker([item.lat, item.lng], { icon: customIcon });
+
+                // Popup Content
+                const popupHTML = `
+                    <div class="space-y-1">
+                        <div class="text-xs text-red-400 font-bold">${item.type} (${item.date})</div>
+                        <div class="font-bold text-sm text-white">${item.unit}</div>
+                        <div class="text-xs text-gray-300">${item.address}</div>
+                        <button onclick="openDrawer(${item.id})" class="mt-2 w-full py-1 bg-red-600/80 hover:bg-red-600 text-white rounded text-xs transition">
+                            查看完整事故報告
+                        </button>
+                    </div>
+                `;
+
+                marker.bindPopup(popupHTML);
+                marker.on('click', () => openDrawer(item.id));
+
+                markerClusterGroup.addLayer(marker);
+                activeMarkers[item.id] = marker;
+
+                // Render List Card
+                const card = document.createElement("div");
+                card.className = "p-3 rounded-xl bg-gray-800/60 border border-gray-700/60 hover:border-red-500/60 transition cursor-pointer hover:bg-gray-800 flex flex-col justify-between space-y-2 group";
+                card.onclick = () => focusIncident(item.id);
+
+                card.innerHTML = `
+                    <div class="flex items-start justify-between">
+                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-full text-white" style="background-color: ${color}20; border: 1px solid ${color}60; color: ${color}">
+                            ${item.type}
+                        </span>
+                        <span class="text-[11px] text-gray-400 font-mono">${item.date}</span>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm text-gray-100 group-hover:text-red-400 transition">${item.unit}</h4>
+                        <p class="text-xs text-gray-400 mt-1 line-clamp-1"><i class="fa-solid fa-location-dot text-gray-500 mr-1"></i>${item.address}</p>
+                    </div>
+                    <div class="flex items-center justify-between pt-1 border-t border-gray-700/40 text-[11px] text-gray-400">
+                        <span><i class="fa-solid fa-industry mr-1 text-gray-500"></i>${item.industry}</span>
+                        <span class="text-red-400 font-medium"><i class="fa-solid fa-user-xmark mr-1"></i>罹災: ${item.victims}人</span>
+                    </div>
+                `;
+
+                listContainer.appendChild(card);
+            });
+
+            // Update Metrics
+            document.getElementById("list-count").textContent = filteredData.length;
+            document.getElementById("stat-total").textContent = filteredData.length;
+
+            const counts = {};
+            filteredData.forEach(i => counts[i.type] = (counts[i.type] || 0) + 1);
+            let topType = "無資料";
+            let maxCount = 0;
+            for (let t in counts) {
+                if (counts[t] > maxCount) {
+                    maxCount = counts[t];
+                    topType = t;
+                }
+            }
+            document.getElementById("stat-top-type").textContent = topType;
+        }
+
+        function filterData() {
+            const searchText = document.getElementById("search-input").value.toLowerCase();
+            const selectedType = document.getElementById("filter-type").value;
+            const selectedCity = document.getElementById("filter-city").value;
+
+            filteredData = rawIncidents.filter(item => {
+                const matchesSearch = item.unit.toLowerCase().includes(searchText) || 
+                                      item.address.toLowerCase().includes(searchText) || 
+                                      item.industry.toLowerCase().includes(searchText);
+
+                const matchesType = (selectedType === "ALL") || (item.type === selectedType);
+                const matchesCity = (selectedCity === "ALL") || (extractCity(item.address) === selectedCity);
+
+                return matchesSearch && matchesType && matchesCity;
+            });
+
+            renderDashboard();
+            updateCharts();
+        }
+
+        function focusIncident(id) {
+            const item = rawIncidents.find(i => i.id === id);
+            if (!item) return;
+
+            map.flyTo([item.lat, item.lng], 15, { duration: 1.2 });
+            const marker = activeMarkers[id];
+            if (marker) {
+                setTimeout(() => {
+                    markerClusterGroup.zoomToShowLayer(marker, () => {
+                        marker.openPopup();
+                    });
+                }, 400);
+            }
+            openDrawer(id);
+        }
+
+        function openDrawer(id) {
+            const item = rawIncidents.find(i => i.id === id);
+            if (!item) return;
+
+            document.getElementById("drawer-title").textContent = item.unit;
+            document.getElementById("drawer-date").textContent = item.date;
+            document.getElementById("drawer-industry").textContent = item.industry;
+            document.getElementById("drawer-address").textContent = item.address;
+            document.getElementById("drawer-agency").textContent = item.agency;
+            document.getElementById("drawer-location").textContent = item.location || "肇災處現場";
+
+            const badge = document.getElementById("drawer-type-badge");
+            badge.textContent = item.type;
+            const color = hazardColors[item.type] || "#ef4444";
+            badge.style.backgroundColor = `${color}20`;
+            badge.style.borderColor = `${color}60`;
+            badge.style.color = color;
+
+            const googleBtn = document.getElementById("drawer-google-map-btn");
+            googleBtn.onclick = () => {
+                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}`, '_blank');
+            };
+
+            const drawer = document.getElementById("detail-drawer");
+            drawer.classList.remove("translate-x-[110%]");
+            drawer.classList.add("translate-x-0");
+        }
+
+        function closeDrawer() {
+            const drawer = document.getElementById("detail-drawer");
+            drawer.classList.remove("translate-x-0");
+            drawer.classList.add("translate-x-[110%]");
+        }
+
+        function resetFilters() {
+            document.getElementById("search-input").value = "";
+            document.getElementById("filter-type").value = "ALL";
+            document.getElementById("filter-city").value = "ALL";
+            filterData();
+            map.flyTo([23.8, 120.9], 8);
+            closeDrawer();
+        }
+
+        function toggleStatsModal() {
+            const modal = document.getElementById("stats-modal");
+            modal.classList.toggle("hidden");
+        }
+
+        function initCharts() {
+            const ctxType = document.getElementById('typeChart').getContext('2d');
+            const ctxCity = document.getElementById('cityChart').getContext('2d');
+
+            typeChartInstance = new Chart(ctxType, {
+                type: 'doughnut',
+                data: getChartData().typeData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#d1d5db', font: { size: 11 } } }
+                    }
+                }
+            });
+
+            cityChartInstance = new Chart(ctxCity, {
+                type: 'bar',
+                data: getChartData().cityData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#9ca3af' }, grid: { display: false } },
+                        y: { ticks: { color: '#9ca3af', precision: 0 }, grid: { color: '#374151' } }
+                    }
+                }
+            });
+        }
+
+        function updateCharts() {
+            if (!typeChartInstance || !cityChartInstance) return;
+
+            const { typeData, cityData } = getChartData();
+            typeChartInstance.data = typeData;
+            typeChartInstance.update();
+
+            cityChartInstance.data = cityData;
+            cityChartInstance.update();
+        }
+
+        function getChartData() {
+            const typeCounts = {};
+            filteredData.forEach(i => typeCounts[i.type] = (typeCounts[i.type] || 0) + 1);
+
+            const typeLabels = Object.keys(typeCounts);
+            const typeValues = Object.values(typeCounts);
+            const typeBgColors = typeLabels.map(t => hazardColors[t] || '#3b82f6');
+
+            const cityCounts = {};
+            filteredData.forEach(i => {
+                const city = extractCity(i.address);
+                cityCounts[city] = (cityCounts[city] || 0) + 1;
+            });
+
+            const cityLabels = Object.keys(cityCounts);
+            const cityValues = Object.values(cityCounts);
+
+            return {
+                typeData: {
+                    labels: typeLabels,
+                    datasets: [{
+                        data: typeValues,
+                        backgroundColor: typeBgColors,
+                        borderWidth: 0
+                    }]
+                },
+                cityData: {
+                    labels: cityLabels,
+                    datasets: [{
+                        data: cityValues,
+                        backgroundColor: '#f97316',
+                        borderRadius: 6
+                    }]
+                }
+            };
+        }
+    </script>
+</body>
+</html>
